@@ -34,7 +34,7 @@
 #define PR_SET_NO_NEW_PRIVS 38
 #endif
 
-static char * prog_path;
+char * prog_path;
 
 int jk_apply_filter(struct sock_fprog * prog)
 {
@@ -98,7 +98,7 @@ char * jk_read_string(pid_t child, unsigned long addr)
 
 static void monitor(pid_t child)
 {
-    int status, syscall;
+    int status, syscall, new_syscall;
     long arg1, arg2, arg3, arg4, arg5, arg6;
     rule_checker fn;
 
@@ -120,11 +120,16 @@ static void monitor(pid_t child)
 #ifdef DEBUG
         fprintf(stderr, "syscall(%d)\n", syscall);
 #endif
+
+        if (syscall == -1)
+            break;
+
         /*
          * Set syscall nr to -1 so child can't execute that syscall even if
          * the jailkeeper will segfault.
          */
         ptrace(PTRACE_POKEUSER, child, sizeof(long)*ORIG_RAX, -1);
+        new_syscall = -1;
 
         arg1 = ptrace(PTRACE_PEEKUSER, child, sizeof(long)*RDI);
         arg2 = ptrace(PTRACE_PEEKUSER, child, sizeof(long)*RSI);
@@ -134,18 +139,18 @@ static void monitor(pid_t child)
         arg6 = ptrace(PTRACE_PEEKUSER, child, sizeof(long)*R9);
 
         fn = jk_get_checker(syscall);
+
 #ifdef DEBUG
         fprintf(stderr,
                 "fn(%d, %d, 0x%lx, 0x%lx, 0x%lx, 0x%lx, 0x%lx, 0x%lx), (%p)\n",
                 child, syscall, arg1, arg2, arg3, arg4, arg5, arg6, fn);
 #endif
-        if (fn && !fn(child, syscall, arg1, arg2, arg3, arg4, arg5, arg6)) {
+        if (!fn || !fn(child, syscall, arg1, arg2, arg3, arg4, arg5, arg6)) {
             /* Restore syscall, permission granted. */
-            ptrace(PTRACE_POKEUSER, child, sizeof(long)*ORIG_RAX, syscall);
-        } else {
-            /* not granted. */
-            ptrace(PTRACE_POKEUSER, child, sizeof(long)*ORIG_RAX, -1);
+            new_syscall = syscall;
         }
+
+        ptrace(PTRACE_POKEUSER, child, sizeof(long)*ORIG_RAX, new_syscall);
     }
 }
 
@@ -176,7 +181,7 @@ int main(int argc, char **argv)
 #ifdef DEBUG
         fprintf(stderr, "execvp((%p)\"%s\" ...)\n", prog_path, prog_path);
 #endif
-        execvp(prog_path, &argv[2]);
+        execvp(prog_path, &argv[1]);
         perror("Failed to execv");
 
         return 255;

@@ -397,7 +397,8 @@ RULE_CHECKER(__NR_execve)
     fprintf(stderr, "0x%016lx, \"%s\"\n", arg1, str);
 #endif
 
-    if (strcmp(str, "./ttest"))
+    //if (strcmp(str, "./ttest"))
+    if (strcmp(str, prog_path))
         return 1;
 
     return 0;
