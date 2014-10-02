@@ -1,5 +1,5 @@
 /*
- * Naive system call dropper built on seccomp_filter.
+ * Seccomp jailkeeper.
  *
  * Copyright (c) 2012 The Chromium OS Authors <chromium-os-dev@chromium.org>
  * Author: Will Drewry <wad@chromium.org>
@@ -139,11 +139,12 @@ static void monitor(pid_t child)
                 "fn(%d, %d, 0x%lx, 0x%lx, 0x%lx, 0x%lx, 0x%lx, 0x%lx), (%p)\n",
                 child, syscall, arg1, arg2, arg3, arg4, arg5, arg6, fn);
 #endif
-        if (!fn || fn(child, syscall, arg1, arg2, arg3, arg4, arg5, arg6)) {
-            ptrace(PTRACE_POKEUSER, child, sizeof(long)*ORIG_RAX, -1);
-        } else {
+        if (fn && !fn(child, syscall, arg1, arg2, arg3, arg4, arg5, arg6)) {
             /* Restore syscall, permission granted. */
             ptrace(PTRACE_POKEUSER, child, sizeof(long)*ORIG_RAX, syscall);
+        } else {
+            /* not granted. */
+            ptrace(PTRACE_POKEUSER, child, sizeof(long)*ORIG_RAX, -1);
         }
     }
 }
