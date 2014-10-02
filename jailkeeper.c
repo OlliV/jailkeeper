@@ -145,7 +145,7 @@ static void monitor(pid_t child)
                 "fn(%d, %d, 0x%lx, 0x%lx, 0x%lx, 0x%lx, 0x%lx, 0x%lx), (%p)\n",
                 child, syscall, arg1, arg2, arg3, arg4, arg5, arg6, fn);
 #endif
-        if (!fn || !fn(child, syscall, arg1, arg2, arg3, arg4, arg5, arg6)) {
+        if (fn && !fn(child, syscall, arg1, arg2, arg3, arg4, arg5, arg6)) {
             /* Restore syscall, permission granted. */
             new_syscall = syscall;
         }

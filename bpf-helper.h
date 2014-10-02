@@ -43,8 +43,13 @@ void seccomp_bpf_print(struct sock_filter *filter, size_t count);
 
 #define ALLOW \
 	BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_ALLOW)
+#if DEBUG
+#define DENY \
+    BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_TRACE)
+#else
 #define DENY \
 	BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_KILL)
+#endif
 #define CHECK \
     BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_TRACE)
 #define JUMP(labels, label) \
