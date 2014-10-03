@@ -1,6 +1,7 @@
 /*
  * Example wrapper around BPF macros.
  *
+ * Copyright (c) 2014 Olli Vanhoja
  * Copyright (c) 2012 The Chromium OS Authors <chromium-os-dev@chromium.org>
  * Author: Will Drewry <wad@chromium.org>
  *

@@ -1,9 +1,12 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <sys/resource.h>
 #include "jailkeeper.h"
 
-int install_filter(void)
+int apply_rules(void)
 {
+    int err = 0;
     struct bpf_labels l;
 
     struct sock_filter filter[] = {
@@ -12,24 +15,31 @@ int install_filter(void)
         SYSCALL(__NR_write, ALLOW),
         SYSCALL(__NR_open, ALLOW),
         SYSCALL(__NR_close, ALLOW),
+#if 0
         SYSCALL(__NR_stat, ALLOW),
+#endif
         SYSCALL(__NR_fstat, ALLOW),
+#if 0
         SYSCALL(__NR_lstat, ALLOW),
         SYSCALL(__NR_poll, ALLOW),
+#endif
         SYSCALL(__NR_lseek, ALLOW),
-        SYSCALL(__NR_mmap, ALLOW),
+        SYSCALL(__NR_mmap, JUMP(&l, chk_mmap)),
         SYSCALL(__NR_mprotect, ALLOW),
         SYSCALL(__NR_munmap, ALLOW),
         SYSCALL(__NR_brk, ALLOW),
+#if 0
         SYSCALL(__NR_rt_sigaction, ALLOW),
         SYSCALL(__NR_rt_sigprocmask, ALLOW),
         SYSCALL(__NR_rt_sigreturn, ALLOW),
         SYSCALL(__NR_ioctl, ALLOW),
+#endif
         SYSCALL(__NR_pread64, ALLOW),
         SYSCALL(__NR_pwrite64, ALLOW),
         SYSCALL(__NR_readv, ALLOW),
         SYSCALL(__NR_writev, ALLOW),
-        SYSCALL(__NR_access, ALLOW),
+        SYSCALL(__NR_access, CHECK),
+#if 0
         SYSCALL(__NR_pipe, ALLOW),
         SYSCALL(__NR_select, ALLOW),
         SYSCALL(__NR_sched_yield, ALLOW),
@@ -48,7 +58,6 @@ int install_filter(void)
         SYSCALL(__NR_alarm, ALLOW),
         SYSCALL(__NR_setitimer, ALLOW),
         SYSCALL(__NR_getpid, ALLOW),
-#if 0
         SYSCALL(__NR_sendfile, ALLOW),
         SYSCALL(__NR_socket, ALLOW),
         SYSCALL(__NR_connect, ALLOW),
@@ -71,10 +80,9 @@ int install_filter(void)
 #endif
         SYSCALL(__NR_execve, CHECK),
         SYSCALL(__NR_exit, ALLOW),
-        SYSCALL(__NR_wait4, ALLOW),
 #if 0
+        SYSCALL(__NR_wait4, ALLOW),
         SYSCALL(__NR_kill, ALLOW),
-#endif
         SYSCALL(__NR_uname, ALLOW),
         SYSCALL(__NR_semget, ALLOW),
         SYSCALL(__NR_semop, ALLOW),
@@ -92,7 +100,6 @@ int install_filter(void)
         SYSCALL(__NR_ftruncate, ALLOW),
         SYSCALL(__NR_getdents, ALLOW),
         SYSCALL(__NR_getcwd, ALLOW),
-#if 0
         SYSCALL(__NR_chdir, ALLOW),
         SYSCALL(__NR_fchdir, ALLOW),
         SYSCALL(__NR_rename, ALLOW),
@@ -102,34 +109,28 @@ int install_filter(void)
         SYSCALL(__NR_link, ALLOW),
         SYSCALL(__NR_unlink, ALLOW),
         SYSCALL(__NR_symlink, ALLOW),
-#endif
         SYSCALL(__NR_readlink, ALLOW),
-#if 0
         SYSCALL(__NR_chmod, ALLOW),
         SYSCALL(__NR_fchmod, ALLOW),
         SYSCALL(__NR_chown, ALLOW),
         SYSCALL(__NR_fchown, ALLOW),
         SYSCALL(__NR_lchown, ALLOW),
         SYSCALL(__NR_umask, ALLOW),
-#endif
         SYSCALL(__NR_gettimeofday, ALLOW),
         SYSCALL(__NR_getrlimit, ALLOW),
+#endif
         SYSCALL(__NR_getrusage, ALLOW),
+#if 0
         SYSCALL(__NR_sysinfo, ALLOW),
         SYSCALL(__NR_times, ALLOW),
-#if 0
-        SYSCALL(__NR_ptrace, ALLOW),
-#endif
+        SYSCALL(__NR_ptrace, DENY),
         SYSCALL(__NR_getuid, ALLOW),
         SYSCALL(__NR_syslog, ALLOW),
-#if 0
         SYSCALL(__NR_getgid, ALLOW),
         SYSCALL(__NR_setuid, ALLOW),
         SYSCALL(__NR_setgid, ALLOW),
-#endif
         SYSCALL(__NR_geteuid, ALLOW),
         SYSCALL(__NR_getegid, ALLOW),
-#if 0
         SYSCALL(__NR_setpgid, ALLOW),
         SYSCALL(__NR_getppid, ALLOW),
         SYSCALL(__NR_getpgrp, ALLOW),
@@ -142,12 +143,9 @@ int install_filter(void)
         SYSCALL(__NR_getresuid, ALLOW),
         SYSCALL(__NR_setresgid, ALLOW),
         SYSCALL(__NR_getresgid, ALLOW),
-#endif
         SYSCALL(__NR_getpgid, ALLOW),
-#if 0
         SYSCALL(__NR_setfsuid, ALLOW),
         SYSCALL(__NR_setfsgid, ALLOW),
-#endif
         SYSCALL(__NR_getsid, ALLOW),
         SYSCALL(__NR_capget, ALLOW),
         SYSCALL(__NR_capset, ALLOW),
@@ -166,14 +164,10 @@ int install_filter(void)
         SYSCALL(__NR_sysfs, ALLOW),
         SYSCALL(__NR_getpriority, ALLOW),
         SYSCALL(__NR_setpriority, ALLOW),
-#if 0
         SYSCALL(__NR_sched_setparam, ALLOW),
-#endif
         SYSCALL(__NR_sched_getparam, ALLOW),
-#if 0
         SYSCALL(__NR_sched_setscheduler, ALLOW),
         SYSCALL(__NR_sched_getscheduler, ALLOW),
-#endif
         SYSCALL(__NR_sched_get_priority_max, ALLOW),
         SYSCALL(__NR_sched_get_priority_min, ALLOW),
         SYSCALL(__NR_sched_rr_get_interval, ALLOW),
@@ -182,11 +176,10 @@ int install_filter(void)
         SYSCALL(__NR_mlockall, ALLOW),
         SYSCALL(__NR_munlockall, ALLOW),
         SYSCALL(__NR_vhangup, ALLOW),
-#if 0
         SYSCALL(__NR_modify_ldt, ALLOW),
         SYSCALL(__NR_pivot_root, ALLOW),
         SYSCALL(__NR__sysctl, ALLOW),
-        SYSCALL(__NR_prctl, ALLOW),
+        SYSCALL(__NR_prctl, DENY),
 #endif
         SYSCALL(__NR_arch_prctl, ALLOW),
 #if 0
@@ -212,13 +205,10 @@ int install_filter(void)
         SYSCALL(__NR_query_module, ALLOW),
         SYSCALL(__NR_quotactl, ALLOW),
         SYSCALL(__NR_nfsservctl, ALLOW),
-#endif
         SYSCALL(__NR_getpmsg, ALLOW),
         SYSCALL(__NR_putpmsg, ALLOW),
         SYSCALL(__NR_afs_syscall, ALLOW),
-#if 0
         SYSCALL(__NR_tuxcall, ALLOW),
-#endif
         SYSCALL(__NR_security, ALLOW),
         SYSCALL(__NR_gettid, ALLOW),
         SYSCALL(__NR_readahead, ALLOW),
@@ -237,7 +227,6 @@ int install_filter(void)
         SYSCALL(__NR_tkill, ALLOW),
         SYSCALL(__NR_time, ALLOW),
         SYSCALL(__NR_futex, ALLOW),
-#if 0
         SYSCALL(__NR_sched_setaffinity, ALLOW),
         SYSCALL(__NR_sched_getaffinity, ALLOW),
         SYSCALL(__NR_set_thread_area, ALLOW),
@@ -252,59 +241,49 @@ int install_filter(void)
         SYSCALL(__NR_epoll_ctl_old, ALLOW),
         SYSCALL(__NR_epoll_wait_old, ALLOW),
         SYSCALL(__NR_remap_file_pages, ALLOW),
-#endif
         SYSCALL(__NR_getdents64, ALLOW),
         SYSCALL(__NR_set_tid_address, ALLOW),
-#if 0
         SYSCALL(__NR_restart_syscall, ALLOW),
         SYSCALL(__NR_semtimedop, ALLOW),
-#endif
         SYSCALL(__NR_fadvise64, ALLOW),
         SYSCALL(__NR_timer_create, ALLOW),
         SYSCALL(__NR_timer_settime, ALLOW),
         SYSCALL(__NR_timer_gettime, ALLOW),
         SYSCALL(__NR_timer_getoverrun, ALLOW),
         SYSCALL(__NR_timer_delete, ALLOW),
-#if 0
         SYSCALL(__NR_clock_settime, ALLOW),
-#endif
         SYSCALL(__NR_clock_gettime, ALLOW),
         SYSCALL(__NR_clock_getres, ALLOW),
         SYSCALL(__NR_clock_nanosleep, ALLOW),
+#endif
         SYSCALL(__NR_exit_group, ALLOW),
+#if 0
         SYSCALL(__NR_epoll_wait, ALLOW),
         SYSCALL(__NR_epoll_ctl, ALLOW),
         SYSCALL(__NR_tgkill, ALLOW),
         SYSCALL(__NR_utimes, ALLOW),
         SYSCALL(__NR_vserver, ALLOW),
         SYSCALL(__NR_mbind, ALLOW),
-#if 0
         SYSCALL(__NR_set_mempolicy, ALLOW),
         SYSCALL(__NR_get_mempolicy, ALLOW),
-#endif
         SYSCALL(__NR_mq_open, ALLOW),
         SYSCALL(__NR_mq_unlink, ALLOW),
         SYSCALL(__NR_mq_timedsend, ALLOW),
         SYSCALL(__NR_mq_timedreceive, ALLOW),
         SYSCALL(__NR_mq_notify, ALLOW),
         SYSCALL(__NR_mq_getsetattr, ALLOW),
-#if 0
         SYSCALL(__NR_kexec_load, ALLOW),
-#endif
         SYSCALL(__NR_waitid, ALLOW),
-#if 0
         SYSCALL(__NR_add_key, ALLOW),
         SYSCALL(__NR_request_key, ALLOW),
         SYSCALL(__NR_keyctl, ALLOW),
         SYSCALL(__NR_ioprio_set, ALLOW),
         SYSCALL(__NR_ioprio_get, ALLOW),
-#endif
         SYSCALL(__NR_inotify_init, ALLOW),
         SYSCALL(__NR_inotify_add_watch, ALLOW),
         SYSCALL(__NR_inotify_rm_watch, ALLOW),
         SYSCALL(__NR_migrate_pages, ALLOW),
         SYSCALL(__NR_openat, ALLOW),
-#if 0
         SYSCALL(__NR_mkdirat, ALLOW),
         SYSCALL(__NR_mknodat, ALLOW),
         SYSCALL(__NR_fchownat, ALLOW),
@@ -314,11 +293,8 @@ int install_filter(void)
         SYSCALL(__NR_renameat, ALLOW),
         SYSCALL(__NR_linkat, ALLOW),
         SYSCALL(__NR_symlinkat, ALLOW),
-#endif
         SYSCALL(__NR_readlinkat, ALLOW),
-#if 0
         SYSCALL(__NR_fchmodat, ALLOW),
-#endif
         SYSCALL(__NR_faccessat, ALLOW),
         SYSCALL(__NR_pselect6, ALLOW),
         SYSCALL(__NR_ppoll, ALLOW),
@@ -328,7 +304,6 @@ int install_filter(void)
         SYSCALL(__NR_splice, ALLOW),
         SYSCALL(__NR_tee, ALLOW),
         SYSCALL(__NR_sync_file_range, ALLOW),
-#if 0
         SYSCALL(__NR_vmsplice, ALLOW),
         SYSCALL(__NR_move_pages, ALLOW),
         SYSCALL(__NR_utimensat, ALLOW),
@@ -363,10 +338,15 @@ int install_filter(void)
         SYSCALL(__NR_sendmmsg, ALLOW),
         SYSCALL(__NR_setns, ALLOW),
         SYSCALL(__NR_getcpu, ALLOW),
-#endif
         SYSCALL(__NR_process_vm_readv, ALLOW),
         SYSCALL(__NR_process_vm_writev, ALLOW),
+#endif
         DENY,
+
+        LABEL(&l, chk_mmap),
+        ARG(4),
+        JEQ(-1, DENY),
+        ALLOW,
     };
 
     struct sock_fprog prog = {
@@ -375,23 +355,59 @@ int install_filter(void)
     };
     bpf_resolve_jumps(&l, filter, num_elem(filter));
 
-    return jk_apply_filter(&prog);
+    /* Set rlimits */
+    const struct rlimit rlimit_cpu = {
+        .rlim_cur = 5,
+        .rlim_max = 10
+
+    };
+
+    err |= setrlimit(RLIMIT_CPU, &rlimit_cpu);
+    err |= jk_install_filter(&prog);
+
+    return err;
+}
+
+RULE_CHECKER(__NR_access)
+{
+    char * str = NULL;
+    int retval = 0;
+#ifdef DEBUG
+    fprintf(stderr, "access() checker\n");
+#endif
+
+    str = jk_read_string(child, arg1);
+    if (!str)
+        goto fail;
+
+    jk_set_syscall_nr(child, -1);
+    fprintf(stderr, "access(%s, %d) replaced with -1\n", str, (int)arg2);
+
+    goto ok;
+fail:
+    retval = -1;
+ok:
+    free(str);
+    return retval;
 }
 
 RULE_CHECKER(__NR_execve)
 {
-    char * str;
+    static int n = 0;
+    char * str = NULL;
+    int retval = 0;
 
 #ifdef DEBUG
-    fprintf(stderr, "execve checker\n");
+    fprintf(stderr, "execve() checker\n");
 #endif
 
-    if (arg1 == 0)
-        return 0;
+    if (n > 0)
+        goto fail;
+    n++;
 
     str = jk_read_string(child, arg1);
     if (!str)
-        return 1;
+        goto fail;
 
 #ifdef DEBUG
     fprintf(stderr, "0x%016lx, \"%s\"\n", arg1, str);
@@ -399,7 +415,12 @@ RULE_CHECKER(__NR_execve)
 
     //if (strcmp(str, "./ttest"))
     if (strcmp(str, prog_path))
-        return 1;
+        goto fail;
 
-    return 0;
+    goto ok;
+fail:
+    retval = 1;
+ok:
+    free(str);
+    return retval;
 }

@@ -1,6 +1,7 @@
 /*
  * Seccomp jailkeeper.
  *
+ * Copyright (c) 2014 Olli Vanhoja
  * Copyright (c) 2012 The Chromium OS Authors <chromium-os-dev@chromium.org>
  * Author: Will Drewry <wad@chromium.org>
  *
@@ -36,7 +37,7 @@
 
 char * prog_path;
 
-int jk_apply_filter(struct sock_fprog * prog)
+int jk_install_filter(struct sock_fprog * prog)
 {
     if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)) {
         perror("prctl(NO_NEW_PRIVS)");
@@ -53,6 +54,11 @@ int jk_apply_filter(struct sock_fprog * prog)
 #endif
 
     return 0;
+}
+
+void jk_set_syscall_nr(pid_t child, unsigned long new_syscall)
+{
+    ptrace(PTRACE_POKEUSER, child, sizeof(long)*ORIG_RAX, new_syscall);
 }
 
 char * jk_read_string(pid_t child, unsigned long addr)
@@ -99,6 +105,7 @@ char * jk_read_string(pid_t child, unsigned long addr)
 static void monitor(pid_t child)
 {
     int status, syscall, new_syscall;
+    long retcode;
     long arg1, arg2, arg3, arg4, arg5, arg6;
     rule_checker fn;
 
@@ -111,46 +118,65 @@ static void monitor(pid_t child)
     while (1) {
         ptrace(PTRACE_CONT, child, NULL, NULL);
         waitpid(child, &status, 0);
-        //if ((WIFSTOPPED(status) && WSTOPSIG(status) & 0x80) || WIFEXITED(status))
-        //    break;
-        if (WIFEXITED(status))
+        if (WIFEXITED(status)) {
+            fprintf(stderr, "\nChild exit with status %d\n", WEXITSTATUS(status));
             break;
+        }
+        if (WIFSIGNALED(status)) {
+            fprintf(stderr, "\nChild terminated to signal %d\n", WTERMSIG(status));
+            break;
+        }
 
         syscall = ptrace(PTRACE_PEEKUSER, child, sizeof(long)*ORIG_RAX);
+        retcode = ptrace(PTRACE_PEEKUSER, child, sizeof(long)*RAX);
+
+        /*
+         * retcode is set to -ENOSYS if this is a syscall entry.
+         */
+        if (retcode != -ENOSYS)
+            continue;
+
 #ifdef DEBUG
         fprintf(stderr, "syscall(%d)\n", syscall);
 #endif
 
-        if (syscall == -1)
+        if (syscall == -1) {
+            kill(child, SIGKILL);
             break;
+        }
 
         /*
          * Set syscall nr to -1 so child can't execute that syscall even if
          * the jailkeeper will segfault.
          */
-        ptrace(PTRACE_POKEUSER, child, sizeof(long)*ORIG_RAX, -1);
+        jk_set_syscall_nr(child, -1);
         new_syscall = -1;
 
-        arg1 = ptrace(PTRACE_PEEKUSER, child, sizeof(long)*RDI);
-        arg2 = ptrace(PTRACE_PEEKUSER, child, sizeof(long)*RSI);
-        arg3 = ptrace(PTRACE_PEEKUSER, child, sizeof(long)*RDX);
-        arg4 = ptrace(PTRACE_PEEKUSER, child, sizeof(long)*RCX);
-        arg5 = ptrace(PTRACE_PEEKUSER, child, sizeof(long)*R8);
-        arg6 = ptrace(PTRACE_PEEKUSER, child, sizeof(long)*R9);
+        arg1 = ptrace(PTRACE_PEEKUSER, child, sizeof(long) * RDI);
+        arg2 = ptrace(PTRACE_PEEKUSER, child, sizeof(long) * RSI);
+        arg3 = ptrace(PTRACE_PEEKUSER, child, sizeof(long) * RDX);
+        arg4 = ptrace(PTRACE_PEEKUSER, child, sizeof(long) * RCX);
+        arg5 = ptrace(PTRACE_PEEKUSER, child, sizeof(long) * R8);
+        arg6 = ptrace(PTRACE_PEEKUSER, child, sizeof(long) * R9);
 
         fn = jk_get_checker(syscall);
 
 #ifdef DEBUG
         fprintf(stderr,
-                "fn(%d, %d, 0x%lx, 0x%lx, 0x%lx, 0x%lx, 0x%lx, 0x%lx), (%p)\n",
-                child, syscall, arg1, arg2, arg3, arg4, arg5, arg6, fn);
+                "chk[%p](%d, %d, 0x%lx, 0x%lx, 0x%lx, 0x%lx, 0x%lx, 0x%lx)\n",
+                fn, child, syscall, arg1, arg2, arg3, arg4, arg5, arg6);
 #endif
         if (fn && !fn(child, syscall, arg1, arg2, arg3, arg4, arg5, arg6)) {
             /* Restore syscall, permission granted. */
             new_syscall = syscall;
         }
 
-        ptrace(PTRACE_POKEUSER, child, sizeof(long)*ORIG_RAX, new_syscall);
+        jk_set_syscall_nr(child, new_syscall);
+        if (new_syscall == -1) {
+            fprintf(stderr, "\nSyscall denied (%d)\n", syscall);
+            kill(child, SIGKILL);
+            break;
+        }
     }
 }
 
@@ -175,7 +201,7 @@ int main(int argc, char **argv)
 #ifdef DEBUG
         fprintf(stderr, "Dropping privileges...");
 #endif
-        if (install_filter())
+        if (apply_rules())
             return 1;
 
 #ifdef DEBUG
@@ -185,9 +211,11 @@ int main(int argc, char **argv)
         perror("Failed to execv");
 
         return 255;
-    } else {
-        monitor(child);
+    } else if (child < 0) {
+        return 255;
     }
+
+    monitor(child);
 
     return 0;
 }

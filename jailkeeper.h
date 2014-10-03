@@ -24,9 +24,11 @@ typedef int (*rule_checker)(RULE_CHECKER_ARGS);
 extern char * prog_path;
 
 rule_checker jk_get_checker(int nr_syscall);
-int jk_apply_filter(struct sock_fprog * prog);
+void jk_set_syscall_nr(pid_t child, unsigned long new_syscall);
+int jk_install_filter(struct sock_fprog * prog);
 char * jk_read_string(pid_t child, unsigned long addr);
 
-int install_filter(void);
+/* Defined in rules.c */
+int apply_rules(void);
 
 #endif /* JAILKEEPER_H */
