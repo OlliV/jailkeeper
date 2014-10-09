@@ -1,3 +1,13 @@
+/*
+ * Seccomp jailkeeper.
+ *
+ * Copyright (c) 2014 Olli Vanhoja
+ *
+ * The code may be used by anyone for any purpose,
+ * and can serve as a starting point for developing
+ * applications using prctl(PR_ATTACH_SECCOMP_FILTER).
+ */
+
 #ifndef JAILKEEPER_H
 #define JAILKEEPER_H
 

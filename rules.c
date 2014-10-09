@@ -1,3 +1,13 @@
+/*
+ * rules
+ *
+ * Copyright (c) 2014 Olli Vanhoja
+ *
+ * The code may be used by anyone for any purpose,
+ * and can serve as a starting point for developing
+ * applications using prctl(PR_ATTACH_SECCOMP_FILTER).
+ */
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
